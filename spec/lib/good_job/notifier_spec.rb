@@ -204,5 +204,43 @@ RSpec.describe GoodJob::Notifier do
       notifier.shutdown
       expect { process.reload }.to raise_error ActiveRecord::RecordNotFound
     end
+
+    context 'when advisory_lock_heartbeat is false' do
+      before do
+        allow(GoodJob.configuration).to receive(:advisory_lock_heartbeat).and_return(false)
+      end
+
+      it 'does not take an advisory lock on the process record' do
+        notifier = described_class.new(enable_listening: true)
+
+        wait_until { expect(GoodJob::Process.count).to eq 1 }
+
+        process = GoodJob::Process.first
+        expect(process.id).to eq GoodJob.capsule.tracker.id_for_lock
+        expect(process).not_to be_advisory_locked
+
+        notifier.shutdown
+        expect { process.reload }.to raise_error ActiveRecord::RecordNotFound
+      end
+    end
+
+    context 'when advisory_lock_heartbeat is true' do
+      before do
+        allow(GoodJob.configuration).to receive(:advisory_lock_heartbeat).and_return(true)
+      end
+
+      it 'takes an advisory lock on the process record' do
+        notifier = described_class.new(enable_listening: true)
+
+        wait_until { expect(GoodJob::Process.count).to eq 1 }
+
+        process = GoodJob::Process.first
+        expect(process.id).to eq GoodJob.capsule.tracker.id_for_lock
+        expect(process).to be_advisory_locked
+
+        notifier.shutdown
+        expect { process.reload }.to raise_error ActiveRecord::RecordNotFound
+      end
+    end
   end
 end

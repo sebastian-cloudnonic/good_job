@@ -37,6 +37,10 @@ module GoodJob
     DEFAULT_ENQUEUE_AFTER_TRANSACTION_COMMIT = false
     # Default smaller_number_is_higher_priority
     DEFAULT_SMALLER_NUMBER_IS_HIGHER_PRIORITY = true
+    # Default advisory lock heartbeat in development environment
+    DEFAULT_ADVISORY_LOCK_HEARTBEAT_DEVELOPMENT = true
+    # Default advisory lock heartbeat in other environments
+    DEFAULT_ADVISORY_LOCK_HEARTBEAT_OTHER = false
 
     def self.validate_execution_mode(execution_mode)
       raise ArgumentError, "GoodJob execution mode must be one of #{EXECUTION_MODES.join(', ')}. It was '#{execution_mode}' which is not valid." unless execution_mode.in?(EXECUTION_MODES)
@@ -383,6 +387,16 @@ module GoodJob
           self_caller.grep(%{/rack/handler/}).any? || # EXAMPLE: iodine-0.7.44/lib/rack/handler/iodine.rb:13:in `start'
           (Concurrent.on_jruby? && self_caller.grep(%r{jruby/rack/rails_booter}).any?) # EXAMPLE: uri:classloader:/jruby/rack/rails_booter.rb:83:in `load_environment'
       end || false
+    end
+
+    # Whether to take an advisory lock on the process record in the notifier reactor.
+    # @return [Boolean]
+    def advisory_lock_heartbeat
+      return options[:advisory_lock_heartbeat] unless options[:advisory_lock_heartbeat].nil?
+      return rails_config[:advisory_lock_heartbeat] unless rails_config[:advisory_lock_heartbeat].nil?
+      return ActiveModel::Type::Boolean.new.cast(env['GOOD_JOB_ADVISORY_LOCK_HEARTBEAT']) unless env['GOOD_JOB_ADVISORY_LOCK_HEARTBEAT'].nil?
+
+      Rails.env.development? ? DEFAULT_ADVISORY_LOCK_HEARTBEAT_DEVELOPMENT : DEFAULT_ADVISORY_LOCK_HEARTBEAT_OTHER
     end
 
     private
